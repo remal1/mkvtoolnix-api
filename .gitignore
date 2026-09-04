@@ -1,6 +1,7 @@
 # Build outputs
 out/
 build/
+build-*/
 bin/
 lib/
 *.dll

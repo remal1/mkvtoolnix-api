@@ -67,25 +67,30 @@ class MkvLibrary:
     _instance: Optional['MkvLibrary'] = None
 
     def __init__(self, dll_path: Optional[str] = None):
+        lib_name = "mkvtoolnix.dll" if sys.platform == "win32" \
+                   else ("libmkvtoolnix.dylib" if sys.platform == "darwin" else "libmkvtoolnix.so")
+
         if dll_path is None:
             # Search possible paths
             possible_paths = [
-                Path(__file__).parent.parent.parent.parent / "out" / "build" / "x64-release" / "Release" / "mkvtoolnix.dll",
-                Path(__file__).parent.parent / "mkvtoolnix.dll",
-                Path(__file__).parent / "mkvtoolnix.dll",
-                Path("mkvtoolnix.dll"),
+                Path(__file__).parent.parent.parent.parent / "out" / "build" / "x64-release" / "Release" / lib_name,
+                Path(__file__).parent.parent.parent.parent / "build-linux" / lib_name,
+                Path(__file__).parent.parent.parent.parent / "build" / lib_name,
+                Path(__file__).parent.parent / lib_name,
+                Path(__file__).parent / lib_name,
+                Path(lib_name),
             ]
             for p in possible_paths:
                 if p.exists():
                     dll_path = str(p.resolve())
                     break
 
-        if not dll_path or not os.path.exists(dll_path):
-            raise FileNotFoundError(f"mkvtoolnix.dll not found at: {dll_path}")
+        if not dll_path or (not os.path.exists(dll_path) and not dll_path.startswith("/")):
+            raise FileNotFoundError(f"{lib_name} not found in search paths!")
 
         # Add Qt and DLL directories to search path on Windows
-        dll_dir = os.path.dirname(os.path.abspath(dll_path))
-        if hasattr(os, "add_dll_directory"):
+        if sys.platform == "win32" and hasattr(os, "add_dll_directory"):
+            dll_dir = os.path.dirname(os.path.abspath(dll_path))
             os.add_dll_directory(dll_dir)
             qt_bin = "C:\\tmp\\Qt\\6.8.0\\msvc2022_64\\bin"
             if os.path.exists(qt_bin):

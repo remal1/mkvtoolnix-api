@@ -28,22 +28,48 @@ if(MSVC)
         COMP_MSC
         _FILE_OFFSET_BITS=64
     )
+else()
+    add_compile_options(
+        -Wall
+        -Wno-sign-compare
+        -Wno-unused-parameter
+        -Wno-unused-variable
+        -fPIC
+    )
+    add_compile_definitions(
+        _FILE_OFFSET_BITS=64
+    )
 endif()
 
 # Find dependencies via vcpkg / system
 find_package(Qt6 REQUIRED COMPONENTS Core)
 find_package(Boost REQUIRED COMPONENTS filesystem system locale)
 find_package(ZLIB REQUIRED)
-find_package(FLAC REQUIRED)
-find_package(Ogg REQUIRED)
-find_package(Vorbis REQUIRED)
-find_package(Iconv REQUIRED)
-find_package(Intl REQUIRED)
 
-find_path(GMP_INCLUDE_DIR NAMES gmp.h)
+find_package(PkgConfig QUIET)
+if(PKG_CONFIG_FOUND AND NOT WIN32)
+    pkg_check_modules(FLAC REQUIRED IMPORTED_TARGET flac)
+    pkg_check_modules(Ogg REQUIRED IMPORTED_TARGET ogg)
+    pkg_check_modules(Vorbis REQUIRED IMPORTED_TARGET vorbis vorbisfile)
+    set(FLAC_TARGET PkgConfig::FLAC)
+    set(OGG_TARGET PkgConfig::Ogg)
+    set(VORBIS_TARGET PkgConfig::Vorbis)
+else()
+    find_package(FLAC REQUIRED)
+    find_package(Ogg REQUIRED)
+    find_package(Vorbis REQUIRED)
+    set(FLAC_TARGET FLAC::FLAC)
+    set(OGG_TARGET Ogg::ogg)
+    set(VORBIS_TARGET Vorbis::vorbis)
+endif()
+
+find_package(Iconv)
+find_package(Intl)
+
+find_path(GMP_INCLUDE_DIR NAMES gmp.h PATH_SUFFIXES x86_64-linux-gnu aarch64-linux-gnu)
 find_library(GMP_LIBRARY NAMES gmp mpir)
 if(NOT GMP_INCLUDE_DIR OR NOT GMP_LIBRARY)
-    message(FATAL_ERROR "GMP / MPIR library not found. Please ensure gmp or mpir is installed via vcpkg.")
+    message(FATAL_ERROR "GMP / MPIR library not found. Please ensure gmp or mpir is installed.")
 endif()
 
 # ---------------------------------------------------------------------------
@@ -77,6 +103,9 @@ if(NOT _OUTPUT_CONTROL_CONTENT MATCHES "g_merge_cancel_requested")
     message(STATUS "Patch applied successfully.")
 endif()
 
+# Ensure multiplatform config.h exists in MKV_ROOT
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.h" "${MKV_ROOT}/config.h" COPYONLY)
+
 set(MKV_INCLUDES
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
     "${MKV_ROOT}"
@@ -104,9 +133,17 @@ file(GLOB MATROSKA_SRCS "${MKV_ROOT}/lib/libmatroska/src/*.cpp")
 
 # 2. MKVToolNix Core engine sources
 file(GLOB_RECURSE COMMON_SRCS "${MKV_ROOT}/src/common/*.cpp")
-# Exclude non-Windows platform files
-list(FILTER COMMON_SRCS EXCLUDE REGEX ".*/unix\\.cpp$")
-list(FILTER COMMON_SRCS EXCLUDE REGEX ".*/macos\\.cpp$")
+if(WIN32)
+    list(FILTER COMMON_SRCS EXCLUDE REGEX ".*/unix\\.cpp$")
+    list(FILTER COMMON_SRCS EXCLUDE REGEX ".*/macos\\.cpp$")
+elseif(APPLE)
+    list(FILTER COMMON_SRCS EXCLUDE REGEX ".*/windows\\.cpp$")
+    list(FILTER COMMON_SRCS EXCLUDE REGEX ".*/unix\\.cpp$")
+else()
+    # Linux / generic Unix
+    list(FILTER COMMON_SRCS EXCLUDE REGEX ".*/windows\\.cpp$")
+    list(FILTER COMMON_SRCS EXCLUDE REGEX ".*/macos\\.cpp$")
+endif()
 
 file(GLOB_RECURSE INPUT_SRCS "${MKV_ROOT}/src/input/*.cpp")
 file(GLOB_RECURSE OUTPUT_SRCS "${MKV_ROOT}/src/output/*.cpp")
@@ -153,33 +190,48 @@ target_compile_definitions(mkvtoolnix PRIVATE
     EBML_MATROSKA_INTERNAL=1
 )
 
+set(PLATFORM_LIBS)
+if(WIN32)
+    list(APPEND PLATFORM_LIBS ws2_32 bcrypt shell32)
+else()
+    list(APPEND PLATFORM_LIBS ${CMAKE_DL_LIBS} pthread)
+endif()
+
+if(TARGET Iconv::Iconv)
+    list(APPEND PLATFORM_LIBS Iconv::Iconv)
+endif()
+if(TARGET Intl::Intl)
+    list(APPEND PLATFORM_LIBS Intl::Intl)
+endif()
+
 target_link_libraries(mkvtoolnix PRIVATE
     Qt6::Core
     Boost::filesystem
     Boost::system
     Boost::locale
     ZLIB::ZLIB
-    FLAC::FLAC
-    Ogg::ogg
-    Vorbis::vorbis
-    Iconv::Iconv
-    Intl::Intl
+    ${FLAC_TARGET}
+    ${OGG_TARGET}
+    ${VORBIS_TARGET}
     ${GMP_LIBRARY}
-    ws2_32
-    bcrypt
-    shell32
+    ${PLATFORM_LIBS}
 )
 
-set_target_properties(mkvtoolnix PROPERTIES
-    OUTPUT_NAME "mkvtoolnix"
-    PREFIX ""
-)
-
-add_custom_command(TARGET mkvtoolnix POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        $<TARGET_FILE:Qt6::Core>
-        $<TARGET_FILE_DIR:mkvtoolnix>
-)
+if(WIN32)
+    set_target_properties(mkvtoolnix PROPERTIES
+        OUTPUT_NAME "mkvtoolnix"
+        PREFIX ""
+    )
+    add_custom_command(TARGET mkvtoolnix POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:Qt6::Core>
+            $<TARGET_FILE_DIR:mkvtoolnix>
+    )
+else()
+    set_target_properties(mkvtoolnix PROPERTIES
+        OUTPUT_NAME "mkvtoolnix"
+    )
+endif()
 
 # 5. Target: minimal (Example application consuming the C ABI)
 add_executable(minimal

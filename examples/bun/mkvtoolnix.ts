@@ -57,11 +57,20 @@ export class MkvLibrary {
   public lib: any;
 
   constructor(dllPath?: string) {
+    const libName = process.platform === "win32" ? "mkvtoolnix.dll"
+                  : process.platform === "darwin" ? "libmkvtoolnix.dylib"
+                  : "libmkvtoolnix.so";
+
     if (!dllPath) {
       const candidates = [
-        resolve(import.meta.dir, "../../out/build/x64-release/Release/mkvtoolnix.dll"),
-        resolve(import.meta.dir, "mkvtoolnix.dll"),
-        "mkvtoolnix.dll",
+        resolve(import.meta.dir, `../../out/build/x64-release/Release/${libName}`),
+        resolve(import.meta.dir, `../../build-linux/${libName}`),
+        resolve(import.meta.dir, `../../build/${libName}`),
+        resolve(import.meta.dir, libName),
+        resolve(process.cwd(), `out/build/x64-release/Release/${libName}`),
+        resolve(process.cwd(), `build-linux/${libName}`),
+        resolve(process.cwd(), `build/${libName}`),
+        libName,
       ];
       for (const p of candidates) {
         if (existsSync(p)) {
@@ -71,8 +80,8 @@ export class MkvLibrary {
       }
     }
 
-    if (!dllPath || !existsSync(dllPath)) {
-      throw new Error(`mkvtoolnix.dll nem található: ${dllPath}`);
+    if (!dllPath || (!existsSync(dllPath) && !dllPath.startsWith("/"))) {
+      throw new Error(`${libName} nem található a keresési útvonalakon!`);
     }
 
     this.lib = dlopen(dllPath, {

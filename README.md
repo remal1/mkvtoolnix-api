@@ -63,14 +63,15 @@ cd mkvtoolnix-api
 
 *(If already cloned without `--recursive`, run `git submodule update --init --recursive`)*
 
-### 2. Prerequisites (Windows)
-- **Visual Studio 2026** (or MSVC v19.40+, C++20 standard)
+### 2. Windows Build
+
+#### Prerequisites
+- **Visual Studio 2022 / 2026** (MSVC v19.40+, C++20 standard)
 - **CMake 3.20+**
 - **Qt 6 Core** (headless, e.g. Qt 6.8.0 Core)
 - **vcpkg packages**: `boost-filesystem`, `boost-system`, `boost-locale`, `flac`, `libogg`, `libvorbis`, `libiconv`, `gettext-libintl`, `mpir`, `zlib`.
 
-### 3. Build
-
+#### Build Command
 ```powershell
 # Configure (automatically checks and applies patches/mkvtoolnix.patch)
 cmake --preset x64-release
@@ -78,8 +79,46 @@ cmake --preset x64-release
 # Build mkvtoolnix.dll
 cmake --build --preset x64-release --config Release
 ```
+The compiled library (`mkvtoolnix.dll`) is placed in `out/build/x64-release/Release/`.
 
-The compiled library (`mkvtoolnix.dll`) and `Qt6Core.dll` are placed in `out/build/x64-release/Release/`.
+### 3. Linux Build (Ubuntu / Debian / WSL2)
+
+#### Prerequisites
+```bash
+sudo apt update && sudo apt install -y \
+    build-essential cmake pkg-config \
+    qt6-base-dev \
+    libboost-filesystem-dev libboost-system-dev libboost-locale-dev \
+    libflac-dev libogg-dev libvorbis-dev \
+    libgmp-dev zlib1g-dev
+```
+
+#### Build Command
+```bash
+# Configure
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+# Build libmkvtoolnix.so
+cmake --build build -j$(nproc)
+```
+The compiled library (`libmkvtoolnix.so`) is placed in `build/`.
+
+### 4. macOS Build (Homebrew)
+
+#### Prerequisites
+```bash
+brew install cmake pkg-config qt@6 boost flac libogg libvorbis gmp zlib
+```
+
+#### Build Command
+```bash
+# Configure with Qt6 path
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$(brew --prefix qt@6)"
+
+# Build libmkvtoolnix.dylib
+cmake --build build -j$(sysctl -n hw.ncpu)
+```
+The compiled library (`libmkvtoolnix.dylib`) is placed in `build/`.
 
 ---
 

@@ -165,8 +165,8 @@ async function main() {
 
   try {
     const proc = spawnSync(cliCmd[0], cliCmd.slice(1));
-    if (proc.status !== 0) {
-      console.warn("    mkvmerge hiba vagy hiányzik:", proc.stderr.toString());
+    if (proc.status !== 0 || proc.error) {
+      console.warn("    mkvmerge hiba vagy hiányzik:", proc.stderr ? proc.stderr.toString().trim() : (proc.error?.message || "nem található PATH-on"));
     } else {
       console.log("    mkvmerge CLI sikeresen lefutott azonos paraméterekkel.");
 

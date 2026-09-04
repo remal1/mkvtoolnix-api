@@ -22,7 +22,38 @@
 #include "merge/reader_detection_and_creation.h"
 #include "merge/track_info.h"
 
+#include <cstdio>
+#include <cstring>
+
 #include "mkvtoolnix-api/c_api.h"
+
+#if defined(_MSC_VER)
+#  define safe_sscanf_2u sscanf_s
+#else
+#  define safe_sscanf_2u sscanf
+#endif
+
+static inline void safe_str_copy(char *dest, size_t dest_size, const char *src) {
+  if (!dest || dest_size == 0)
+    return;
+  if (!src) {
+    dest[0] = '\0';
+    return;
+  }
+#if defined(_MSC_VER)
+  strncpy_s(dest, dest_size, src, _TRUNCATE);
+#else
+  std::snprintf(dest, dest_size, "%s", src);
+#endif
+}
+
+static inline std::filesystem::path to_fs_path(const std::string &path_str) {
+#if defined(_WIN32)
+  return std::filesystem::path(reinterpret_cast<const char8_t*>(path_str.c_str()));
+#else
+  return std::filesystem::path(path_str);
+#endif
+}
 
 struct mtx_input {
   uint32_t index;
@@ -494,7 +525,7 @@ int MTX_API_CALL mtx_merge_execute(mtx_merge_t *merge) {
   if (g_merge_cancel_requested.load(std::memory_order_relaxed)) {
     if (!g_outfile.empty()) {
       std::error_code ec;
-      std::filesystem::remove(std::filesystem::u8path(g_outfile), ec);
+      std::filesystem::remove(to_fs_path(g_outfile), ec);
     }
     return fail(merge->context, MTX_ERROR_CANCELLED, "Operation cancelled by user");
   }
@@ -505,7 +536,7 @@ int MTX_API_CALL mtx_merge_execute(mtx_merge_t *merge) {
     force_close_output_file();
     if (!g_outfile.empty()) {
       std::error_code ec;
-      std::filesystem::remove(std::filesystem::u8path(g_outfile), ec);
+      std::filesystem::remove(to_fs_path(g_outfile), ec);
     }
     return fail(merge->context, MTX_ERROR_CANCELLED, "Operation cancelled by user");
   } catch (api_error_x const &ex) {
@@ -566,7 +597,7 @@ int MTX_API_CALL mtx_track_get_type(mtx_merge_t *merge, mtx_track_t const *track
 
   for (auto const &t : file->reader->get_id_results_tracks()) {
     if (t.id == track->track_id) {
-      strncpy_s(buf, buf_size, t.type.c_str(), _TRUNCATE);
+      safe_str_copy(buf, buf_size, t.type.c_str());
       return MTX_OK;
     }
   }
@@ -585,7 +616,7 @@ int MTX_API_CALL mtx_track_get_codec(mtx_merge_t *merge, mtx_track_t const *trac
 
   for (auto const &t : file->reader->get_id_results_tracks()) {
     if (t.id == track->track_id) {
-      strncpy_s(buf, buf_size, t.info.c_str(), _TRUNCATE);
+      safe_str_copy(buf, buf_size, t.info.c_str());
       return MTX_OK;
     }
   }
@@ -756,7 +787,7 @@ int MTX_API_CALL mtx_input_get_file_info(mtx_merge_t *merge, mtx_input_t *input,
 
   memset(result, 0, sizeof(*result));
   auto const &c_res = file->reader->get_id_results_container();
-  strncpy_s(result->container_format, sizeof(result->container_format), c_res.info.c_str(), _TRUNCATE);
+  safe_str_copy(result->container_format, sizeof(result->container_format), c_res.info.c_str());
   result->track_count = static_cast<uint32_t>(file->reader->get_id_results_tracks().size());
 
   if (auto prop = find_property(c_res.verbose_info, mtx::id::duration)) {
@@ -787,13 +818,13 @@ int MTX_API_CALL mtx_input_get_track_info(mtx_merge_t *merge, mtx_input_t *input
   auto const &t_res = tracks[index];
   memset(result, 0, sizeof(*result));
   result->track_id = t_res.id;
-  strncpy_s(result->type, sizeof(result->type), t_res.type.c_str(), _TRUNCATE);
-  strncpy_s(result->codec, sizeof(result->codec), t_res.info.c_str(), _TRUNCATE);
+  safe_str_copy(result->type, sizeof(result->type), t_res.type.c_str());
+  safe_str_copy(result->codec, sizeof(result->codec), t_res.info.c_str());
 
   if (auto prop = find_property(t_res.verbose_info, mtx::id::pixel_dimensions)) {
     if (prop->is_string()) {
       unsigned int w = 0, h = 0;
-      if (sscanf_s(prop->get<std::string>().c_str(), "%ux%u", &w, &h) == 2) {
+      if (safe_sscanf_2u(prop->get<std::string>().c_str(), "%ux%u", &w, &h) == 2) {
         result->pixel_width = w;
         result->pixel_height = h;
       }
@@ -803,7 +834,7 @@ int MTX_API_CALL mtx_input_get_track_info(mtx_merge_t *merge, mtx_input_t *input
   if (auto prop = find_property(t_res.verbose_info, mtx::id::display_dimensions)) {
     if (prop->is_string()) {
       unsigned int dw = 0, dh = 0;
-      if (sscanf_s(prop->get<std::string>().c_str(), "%ux%u", &dw, &dh) == 2) {
+      if (safe_sscanf_2u(prop->get<std::string>().c_str(), "%ux%u", &dw, &dh) == 2) {
         result->display_width = dw;
         result->display_height = dh;
       }
@@ -835,17 +866,17 @@ int MTX_API_CALL mtx_input_get_track_info(mtx_merge_t *merge, mtx_input_t *input
 
   if (auto prop = find_property(t_res.verbose_info, mtx::id::language)) {
     if (prop->is_string())
-      strncpy_s(result->language, sizeof(result->language), prop->get<std::string>().c_str(), _TRUNCATE);
+      safe_str_copy(result->language, sizeof(result->language), prop->get<std::string>().c_str());
   }
 
   if (auto prop = find_property(t_res.verbose_info, mtx::id::language_ietf)) {
     if (prop->is_string())
-      strncpy_s(result->language_ietf, sizeof(result->language_ietf), prop->get<std::string>().c_str(), _TRUNCATE);
+      safe_str_copy(result->language_ietf, sizeof(result->language_ietf), prop->get<std::string>().c_str());
   }
 
   if (auto prop = find_property(t_res.verbose_info, mtx::id::track_name)) {
     if (prop->is_string())
-      strncpy_s(result->name, sizeof(result->name), prop->get<std::string>().c_str(), _TRUNCATE);
+      safe_str_copy(result->name, sizeof(result->name), prop->get<std::string>().c_str());
   }
 
   if (auto prop = find_property(t_res.verbose_info, mtx::id::default_track)) {
