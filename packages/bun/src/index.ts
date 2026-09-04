@@ -85,7 +85,7 @@ export class MkvLibrary {
       mtx_context_create: { args: [], returns: FFIType.ptr },
       mtx_context_destroy: { args: [FFIType.ptr], returns: FFIType.void },
       mtx_context_last_error: { args: [FFIType.ptr], returns: FFIType.cstring },
-      mtx_context_set_log_callback: { args: [FFIType.ptr, FFIType.fn, FFIType.ptr], returns: FFIType.void },
+      mtx_context_set_log_callback: { args: [FFIType.ptr, FFIType.function, FFIType.ptr], returns: FFIType.void },
 
       mtx_merge_create: { args: [FFIType.ptr], returns: FFIType.ptr },
       mtx_merge_destroy: { args: [FFIType.ptr], returns: FFIType.void },
@@ -95,7 +95,7 @@ export class MkvLibrary {
       mtx_merge_set_cluster_max_duration: { args: [FFIType.ptr, FFIType.i64], returns: FFIType.i32 },
       mtx_merge_set_track_statistics_tags: { args: [FFIType.ptr, FFIType.i32], returns: FFIType.i32 },
       mtx_merge_set_deterministic: { args: [FFIType.ptr, FFIType.i32], returns: FFIType.i32 },
-      mtx_merge_set_progress_callback: { args: [FFIType.ptr, FFIType.fn, FFIType.ptr], returns: FFIType.void },
+      mtx_merge_set_progress_callback: { args: [FFIType.ptr, FFIType.function, FFIType.ptr], returns: FFIType.void },
 
       mtx_merge_add_input: { args: [FFIType.ptr, FFIType.cstring, FFIType.ptr], returns: FFIType.i32 },
       mtx_merge_prepare: { args: [FFIType.ptr], returns: FFIType.i32 },

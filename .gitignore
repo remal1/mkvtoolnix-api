@@ -46,3 +46,8 @@ temp_*.webm
 
 # Qt / aqt installer artifacts
 aqt*
+
+# Node / Bun dependencies
+node_modules/
+bun.lock
+bun.lockb
