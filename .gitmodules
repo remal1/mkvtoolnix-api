@@ -1,0 +1,3 @@
+[submodule "third_party/mkvtoolnix"]
+	path = third_party/mkvtoolnix
+	url = https://codeberg.org/mbunkus/mkvtoolnix.git

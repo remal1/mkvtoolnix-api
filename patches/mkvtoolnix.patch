@@ -1,0 +1,339 @@
+diff --git a/lib/avilib-0.6.10/avilib.c b/lib/avilib-0.6.10/avilib.c
+index 85a284fc1..2e07c06d1 100644
+--- a/lib/avilib-0.6.10/avilib.c
++++ b/lib/avilib-0.6.10/avilib.c
+@@ -63,14 +63,11 @@ static void *_saferealloc(void *p, size_t size, int line) {
+ 
+ #define safemulu(a, b) _safemulu(a, b, __LINE__)
+ static size_t _safemulu(size_t a, size_t b, int line) {
+-  size_t result = 0;
+-
+-  if (__builtin_mul_overflow(a, b, &result)) {
+-    fprintf(stderr, "avilib.c/_safemulu() called from line %d: __builtin_mul_overflow(%zu, %zu) indicated an overflow.\n", line, a, b);
++  if (b != 0 && a > ((size_t)-1) / b) {
++    fprintf(stderr, "avilib.c/_safemulu() called from line %d: multiplication overflow (%zu * %zu).\n", line, a, b);
+     exit(2);
+   }
+-
+-  return result;
++  return a * b;
+ }
+ 
+ #if defined(COMP_MSC) || defined(COMP_MINGW)
+diff --git a/lib/avilib-0.6.10/xio.h b/lib/avilib-0.6.10/xio.h
+index fdd29db33..5b5803bbb 100644
+--- a/lib/avilib-0.6.10/xio.h
++++ b/lib/avilib-0.6.10/xio.h
+@@ -28,6 +28,7 @@
+ extern "C" {
+ #endif
+ 
++#include "config.h"
+ #include <sys/types.h>
+ #include <sys/stat.h>
+ 
+diff --git a/lib/librmff/mb_file_io.c b/lib/librmff/mb_file_io.c
+index 3e2a771ed..45ec5aa87 100644
+--- a/lib/librmff/mb_file_io.c
++++ b/lib/librmff/mb_file_io.c
+@@ -53,7 +53,7 @@ mb_std_file_open(const char *path,
+       return NULL;
+   }
+ 
+-  file = (void *)CreateFile(path, access_mode, share_mode, NULL, disposition,
++  file = (void *)CreateFileA(path, access_mode, share_mode, NULL, disposition,
+                             0, NULL);
+   if ((HANDLE)file == (HANDLE)0xFFFFFFFF)
+     return NULL;
+diff --git a/src/common/command_line.cpp b/src/common/command_line.cpp
+index b9feb1c35..1cb4083b5 100644
+--- a/src/common/command_line.cpp
++++ b/src/common/command_line.cpp
+@@ -17,6 +17,7 @@
+ #include <cstring>
+ #ifdef SYS_WINDOWS
+ # include <windows.h>
++# include <shellapi.h>
+ #endif
+ 
+ #include "common/command_line.h"
+diff --git a/src/common/math.h b/src/common/math.h
+index 9a61f3191..7b9780cfa 100644
+--- a/src/common/math.h
++++ b/src/common/math.h
+@@ -28,7 +28,7 @@ namespace mtx::math {
+ inline std::size_t
+ count_1_bits(uint64_t value) {
+ #if defined(COMP_MSC)
+-  return __popcnt(value);
++  return __popcnt64(value);
+ #else
+   return __builtin_popcountll(value);
+ #endif
+diff --git a/src/common/opus.h b/src/common/opus.h
+index 168a80609..795806102 100644
+--- a/src/common/opus.h
++++ b/src/common/opus.h
+@@ -39,6 +39,9 @@ public:
+   }
+ };
+ 
++#if defined(COMP_MSC)
++#pragma pack(push, 1)
++#endif
+ struct PACKED_STRUCTURE packed_id_header_t {
+   char     identifier[8]; // "OpusHead"
+   uint8_t  version;       // 1
+@@ -48,6 +51,9 @@ struct PACKED_STRUCTURE packed_id_header_t {
+   uint16_t output_gain;
+   uint8_t  channel_map;
+ };
++#if defined(COMP_MSC)
++#pragma pack(pop)
++#endif
+ 
+ struct id_header_t {
+   unsigned int channels, pre_skip, input_sample_rate, output_gain;
+diff --git a/src/common/random.cpp b/src/common/random.cpp
+index 225eac5e8..440706f3d 100644
+--- a/src/common/random.cpp
++++ b/src/common/random.cpp
+@@ -22,7 +22,7 @@
+ namespace {
+ 
+ std::unique_ptr<std::mt19937_64> s_generator;
+-std::uniform_int_distribution<uint8_t> s_uint8_distribution;
++std::uniform_int_distribution<unsigned short> s_uint8_distribution{0, 255};
+ std::uniform_int_distribution<uint32_t> s_uint32_distribution;
+ std::uniform_int_distribution<uint64_t> s_uint64_distribution;
+ 
+@@ -53,12 +53,12 @@ random_c::generate_bytes(void *destination,
+   auto dst = static_cast<uint8_t *>(destination);
+ 
+   for (int i = 0; i < static_cast<int>(num_bytes); ++i, ++dst)
+-    *dst = s_uint8_distribution(*s_generator);
++    *dst = static_cast<uint8_t>(s_uint8_distribution(*s_generator));
+ }
+ 
+ uint8_t
+ random_c::generate_8bits() {
+-  return s_uint8_distribution(*s_generator);
++  return static_cast<uint8_t>(s_uint8_distribution(*s_generator));
+ }
+ 
+ uint32_t
+diff --git a/src/input/packet_converter.h b/src/input/packet_converter.h
+index e1b3fb15d..18d3a9a83 100644
+--- a/src/input/packet_converter.h
++++ b/src/input/packet_converter.h
+@@ -17,7 +17,7 @@
+ 
+ #include "merge/packet.h"
+ 
+-class packet_t;
++struct packet_t;
+ 
+ class packet_converter_c {
+ protected:
+diff --git a/src/input/r_flac.cpp b/src/input/r_flac.cpp
+index 950e7a5ca..825a053f5 100644
+--- a/src/input/r_flac.cpp
++++ b/src/input/r_flac.cpp
+@@ -338,7 +338,7 @@ flac_reader_c::flac_metadata_cb(const FLAC__StreamMetadata *metadata) {
+ 
+   auto position = new_decode_position - metadata->length - FLAC__STREAM_METADATA_HEADER_LENGTH;
+ 
+-  m_metadata_block_info.emplace_back(flac_block_t{ position, metadata->type, metadata->length + FLAC__STREAM_METADATA_HEADER_LENGTH });
++  m_metadata_block_info.emplace_back(flac_block_t{ position, static_cast<unsigned int>(metadata->type), metadata->length + FLAC__STREAM_METADATA_HEADER_LENGTH });
+ 
+   mxdebug_if(m_debug,
+              fmt::format("flac_reader: metadata type {0} ({1}) size {2} at {3}\n",
+diff --git a/src/input/r_qtmp4.h b/src/input/r_qtmp4.h
+index a2fdf3a79..667a83453 100644
+--- a/src/input/r_qtmp4.h
++++ b/src/input/r_qtmp4.h
+@@ -496,7 +496,7 @@ private:
+     , m_debug_interleaving{"qtmp4|qtmp4_full|qtmp4_interleaving"}
+     , m_debug_resync{      "qtmp4|qtmp4_full|qtmp4_resync"};
+ 
+-  friend class qtmp4_demuxer_c;
++  friend struct qtmp4_demuxer_c;
+ 
+ public:
+   virtual mtx::file_type_e get_format_type() const {
+diff --git a/src/merge/cluster_helper.h b/src/merge/cluster_helper.h
+index 63ac35b53..8fd56305b 100644
+--- a/src/merge/cluster_helper.h
++++ b/src/merge/cluster_helper.h
+@@ -29,7 +29,7 @@
+ 
+ class generic_packetizer_c;
+ class render_groups_c;
+-class packet_t;
++struct packet_t;
+ using packet_cptr = std::shared_ptr<packet_t>;
+ 
+ enum class chapter_generation_mode_e {
+diff --git a/src/merge/generic_reader.h b/src/merge/generic_reader.h
+index aac23f7d3..86a3c571e 100644
+--- a/src/merge/generic_reader.h
++++ b/src/merge/generic_reader.h
+@@ -55,6 +55,7 @@ public:
+   probe_range_info_t m_probe_range_info{};
+ 
+ protected:
++  bool m_identified{false};
+   id_result_t m_id_results_container;
+   std::vector<id_result_t> m_id_results_tracks, m_id_results_attachments, m_id_results_chapters, m_id_results_tags;
+ 
+@@ -119,6 +120,22 @@ public:
+   virtual attach_mode_e attachment_requested(int64_t id);
+ 
+   virtual void display_identification_results();
++  virtual void run_identify() {
++    if (!m_identified) {
++      m_id_results_tracks.clear();
++      m_id_results_attachments.clear();
++      m_id_results_chapters.clear();
++      m_id_results_tags.clear();
++      identify();
++      m_identified = true;
++    }
++  }
++  virtual std::vector<id_result_t> const &get_id_results_tracks() const {
++    return m_id_results_tracks;
++  }
++  virtual id_result_t const &get_id_results_container() const {
++    return m_id_results_container;
++  }
+ 
+   virtual int64_t calculate_probe_range(int64_t file_size, int64_t fixed_minimum) const;
+   virtual bool probe_file() = 0;
+diff --git a/src/merge/output_control.cpp b/src/merge/output_control.cpp
+index dc7255ed7..1826b8ccc 100644
+--- a/src/merge/output_control.cpp
++++ b/src/merge/output_control.cpp
+@@ -75,6 +75,10 @@
+ #include "merge/output_control.h"
+ #include "merge/webm.h"
+ 
++std::atomic<bool> g_merge_cancel_requested{false};
++std::function<void(int percentage, int64_t current_timestamp_ns, int64_t total_duration_ns, int64_t bytes_written)> g_merge_progress_callback;
++static int64_t s_last_packet_timestamp = 0;
++
+ using namespace mtx::construct;
+ 
+ class kax_my_duration: public libmatroska::KaxDuration {
+@@ -326,6 +330,11 @@ display_progress(bool is_100percent = false) {
+     return;
+ 
+   if (is_100percent) {
++    if (g_merge_progress_callback) {
++      int64_t tot_dur = s_maximum_progress ? *s_maximum_progress : 0;
++      int64_t bytes_wr = s_out ? s_out->getFilePointer() : 0;
++      g_merge_progress_callback(100, tot_dur, tot_dur, bytes_wr);
++    }
+     if (mtx::cli::g_gui_mode)
+       mxinfo(fmt::format("#GUI#progress 100%\n"));
+     else
+@@ -349,6 +358,12 @@ display_progress(bool is_100percent = false) {
+   // if (2 < current_percentage)
+   //   exit(42);
+ 
++  if (g_merge_progress_callback) {
++    int64_t tot_dur = s_maximum_progress ? *s_maximum_progress : 0;
++    int64_t bytes_wr = s_out ? s_out->getFilePointer() : 0;
++    g_merge_progress_callback(current_percentage, s_last_packet_timestamp, tot_dur, bytes_wr);
++  }
++
+   if (mtx::cli::g_gui_mode)
+     mxinfo(fmt::format("#GUI#progress {0}%\n", current_percentage));
+   else
+@@ -2230,6 +2245,11 @@ void
+ main_loop() {
+   // Let's go!
+   while (1) {
++    if (g_merge_cancel_requested.load(std::memory_order_relaxed)) {
++      force_close_output_file();
++      throw mtx::merge_cancelled_x{};
++    }
++
+     // Step 1: Make sure a packet is available for each output
+     // as long we haven't already processed the last one.
+     auto end_of_video_reached1                 = pull_packetizers_for_packets();
+@@ -2246,6 +2266,8 @@ main_loop() {
+       break;
+ 
+     if (winner && winner->pack) {
++      s_last_packet_timestamp = winner->pack->assigned_timestamp;
++
+       // Step 3: Add the winning packet to a cluster. Full clusters will be
+       // rendered automatically.
+       g_cluster_helper->add_packet(winner->pack);
+@@ -2262,7 +2284,7 @@ main_loop() {
+       }
+ 
+       // display some progress information
+-      if (1 <= verbose)
++      if ((1 <= verbose) || g_merge_progress_callback)
+         display_progress();
+ 
+     } else if (!appended_a_track && !force_pulled) // exit if there are no more packets
+@@ -2273,7 +2295,7 @@ main_loop() {
+   if (g_cluster_helper && (0 < g_cluster_helper->get_packet_count()))
+     g_cluster_helper->render();
+ 
+-  if (1 <= verbose)
++  if ((1 <= verbose) || g_merge_progress_callback)
+     display_progress(true);
+ }
+ 
+@@ -2291,6 +2313,9 @@ destroy_readers() {
+ */
+ void
+ cleanup() {
++  g_merge_cancel_requested.store(false);
++  g_merge_progress_callback = nullptr;
++  s_last_packet_timestamp = 0;
+   if (s_out) {
+     // If cleanup was called as a result of an exception during
+     // writing due to the file system being full, the destructor would
+diff --git a/src/merge/output_control.h b/src/merge/output_control.h
+index 4501f20ec..1dcbba36d 100644
+--- a/src/merge/output_control.h
++++ b/src/merge/output_control.h
+@@ -16,9 +16,21 @@
+ 
+ #include "common/common_pch.h"
+ 
++#include <atomic>
+ #include <deque>
++#include <functional>
+ #include <unordered_map>
+ 
++namespace mtx {
++class merge_cancelled_x: public std::runtime_error {
++public:
++  merge_cancelled_x() : std::runtime_error{"Operation cancelled by user"} {}
++};
++}
++
++extern std::atomic<bool> g_merge_cancel_requested;
++extern std::function<void(int percentage, int64_t current_timestamp_ns, int64_t total_duration_ns, int64_t bytes_written)> g_merge_progress_callback;
++
+ #include "common/attachment.h"
+ #include "common/bcp47.h"
+ #include "common/bitvalue.h"
+diff --git a/src/merge/timestamp_calculator.h b/src/merge/timestamp_calculator.h
+index ccd68d701..f92461dbb 100644
+--- a/src/merge/timestamp_calculator.h
++++ b/src/merge/timestamp_calculator.h
+@@ -19,7 +19,7 @@
+ #include "common/samples_to_timestamp_converter.h"
+ #include "common/timestamp.h"
+ 
+-class packet_t;
++struct packet_t;
+ using packet_cptr = std::shared_ptr<packet_t>;
+ 
+ class timestamp_calculator_c {

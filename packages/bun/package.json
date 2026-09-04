@@ -1,0 +1,21 @@
+{
+  "name": "@mkvtoolnix/bun",
+  "version": "101.0.0",
+  "description": "Universal Bun TypeScript FFI bindings for headless MKVToolNix C ABI (mkvtoolnix.dll)",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "type": "module",
+  "scripts": {
+    "test": "bun test"
+  },
+  "keywords": [
+    "mkvtoolnix",
+    "mkvmerge",
+    "matroska",
+    "remux",
+    "ffi",
+    "bun"
+  ],
+  "author": "Antigravity MKVToolNix Team",
+  "license": "GPL-2.0"
+}

@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mkvtoolnix"
+version = "101.0.0"
+description = "Universal Python FFI bindings for the headless MKVToolNix C ABI (mkvtoolnix.dll)"
+readme = "README.md"
+requires-python = ">=3.8"
+authors = [
+    { name = "Antigravity MKVToolNix Team" }
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: Microsoft :: Windows",
+    "Topic :: Multimedia :: Video",
+]
+
+[project.urls]
+Homepage = "https://mkvtoolnix.download/"

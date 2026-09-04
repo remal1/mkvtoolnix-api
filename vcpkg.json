@@ -1,0 +1,18 @@
+{
+  "name": "mkvtoolnix-api",
+  "version-string": "1.0.0",
+  "dependencies": [
+    "boost-filesystem",
+    "boost-system",
+    "boost-multiprecision",
+    "boost-algorithm",
+    "boost-locale",
+    "mpir",
+    "libiconv",
+    "gettext",
+    "zlib",
+    "libflac",
+    "libogg",
+    "libvorbis"
+  ]
+}
