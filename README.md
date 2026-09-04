@@ -151,7 +151,11 @@ try {
     }
   }
 
-  // 4. Real-time progress callback
+  // 4. Add attachments & chapters
+  merge.addAttachmentFile("cover.jpg", "cover.jpg", "image/jpeg", "Movie Poster");
+  merge.setChaptersText("CHAPTER01=00:00:00.000\nCHAPTER01NAME=Intro\nCHAPTER02=00:00:10.000\nCHAPTER02NAME=Main");
+
+  // 5. Real-time progress callback
   merge.onProgress((pct, curSec, totSec, bytesWritten) => {
     console.log(`Progress: ${pct}% (${curSec.toFixed(1)}s / ${totSec.toFixed(1)}s) | Written: ${(bytesWritten / 1024).toFixed(0)} KB`);
   });
@@ -186,6 +190,10 @@ with MkvContext() as ctx:
             track.set_default(True)
             track.set_delay(250)  # +250ms
 
+    # Add attachments & chapters
+    merge.add_attachment_file("cover.jpg", name="cover.jpg", mime_type="image/jpeg", description="Movie Poster")
+    merge.set_chapters_text("CHAPTER01=00:00:00.000\nCHAPTER01NAME=Intro\nCHAPTER02=00:00:10.000\nCHAPTER02NAME=Main")
+
     # Real-time progress
     merge.on_progress(lambda pct, cur, tot, b: print(f"{pct}% ({cur:.1f}s / {tot:.1f}s)"))
 
@@ -216,9 +224,12 @@ Both test suites perform:
 1. Version handshake and capability inspection.
 2. Media identify / JSON metadata extraction.
 3. Track configuration (BCP 47 language, titles, flags, dimensions, audio delay).
-4. Real-time progress callback execution.
-5. Asynchronous cancellation with automatic partial file cleanup.
-6. 1:1 parity comparison against official `mkvmerge` CLI output.
+4. Attachments (file & memory buffer) and chapters (OGG simple / XML) muxing.
+5. Verification of attachments and chapters via JSON identification.
+6. Input attachment and chapter suppression (`--no-attachments`, `--no-chapters`).
+7. Real-time progress callback execution.
+8. Asynchronous cancellation with automatic partial file cleanup.
+9. 1:1 parity comparison against official `mkvmerge` CLI output.
 
 ---
 

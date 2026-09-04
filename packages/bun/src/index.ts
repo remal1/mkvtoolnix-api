@@ -141,6 +141,16 @@ export class MkvLibrary {
 
       mtx_track_set_compression: { args: [FFIType.ptr, FFIType.ptr, FFIType.i32], returns: FFIType.i32 },
       mtx_track_set_cues: { args: [FFIType.ptr, FFIType.ptr, FFIType.i32], returns: FFIType.i32 },
+
+      mtx_input_set_no_attachments: { args: [FFIType.ptr, FFIType.ptr, FFIType.i32], returns: FFIType.i32 },
+      mtx_input_set_no_chapters: { args: [FFIType.ptr, FFIType.ptr, FFIType.i32], returns: FFIType.i32 },
+
+      mtx_merge_add_attachment_file: { args: [FFIType.ptr, FFIType.cstring, FFIType.cstring, FFIType.cstring, FFIType.cstring], returns: FFIType.i32 },
+      mtx_merge_add_attachment_memory: { args: [FFIType.ptr, FFIType.ptr, FFIType.u64, FFIType.cstring, FFIType.cstring, FFIType.cstring], returns: FFIType.i32 },
+
+      mtx_merge_set_chapters_file: { args: [FFIType.ptr, FFIType.cstring, FFIType.cstring, FFIType.cstring], returns: FFIType.i32 },
+      mtx_merge_set_chapters_text: { args: [FFIType.ptr, FFIType.cstring, FFIType.cstring, FFIType.cstring], returns: FFIType.i32 },
+      mtx_merge_generate_chapters: { args: [FFIType.ptr, FFIType.i64, FFIType.cstring, FFIType.cstring], returns: FFIType.i32 },
     });
   }
 
@@ -308,6 +318,26 @@ export class MkvInput {
     }
     return JSON.parse(jsonStr.toString());
   }
+
+  public setNoAttachments(noAttachments: boolean = true): this {
+    const rc = this.merge.library.lib.symbols.mtx_input_set_no_attachments(
+      this.merge.handle,
+      this.handle,
+      noAttachments ? 1 : 0
+    );
+    if (rc !== 0) throw new MkvError(`Hiba a no-attachments beállításakor: ${this.merge.context.getLastError()}`, rc);
+    return this;
+  }
+
+  public setNoChapters(noChapters: boolean = true): this {
+    const rc = this.merge.library.lib.symbols.mtx_input_set_no_chapters(
+      this.merge.handle,
+      this.handle,
+      noChapters ? 1 : 0
+    );
+    if (rc !== 0) throw new MkvError(`Hiba a no-chapters beállításakor: ${this.merge.context.getLastError()}`, rc);
+    return this;
+  }
 }
 
 export class MkvContext {
@@ -385,6 +415,64 @@ export class MkvMerge {
       enabled ? 1 : 0
     );
     if (rc !== 0) throw new MkvError(`Hiba a determinisztikus mód beállításakor: ${this.context.getLastError()}`, rc);
+    return this;
+  }
+
+  public addAttachmentFile(filePath: string, name?: string, mimeType?: string, description?: string): this {
+    const rc = this.library.lib.symbols.mtx_merge_add_attachment_file(
+      this.handle,
+      Buffer.from(filePath + "\0"),
+      name ? Buffer.from(name + "\0") : null,
+      mimeType ? Buffer.from(mimeType + "\0") : null,
+      description ? Buffer.from(description + "\0") : null
+    );
+    if (rc !== 0) throw new MkvError(`Hiba a csatolmány hozzáadásakor (${filePath}): ${this.context.getLastError()}`, rc);
+    return this;
+  }
+
+  public addAttachmentMemory(data: Uint8Array, name: string, mimeType?: string, description?: string): this {
+    const rc = this.library.lib.symbols.mtx_merge_add_attachment_memory(
+      this.handle,
+      ptr(data),
+      BigInt(data.byteLength),
+      Buffer.from(name + "\0"),
+      mimeType ? Buffer.from(mimeType + "\0") : null,
+      description ? Buffer.from(description + "\0") : null
+    );
+    if (rc !== 0) throw new MkvError(`Hiba a memóriacsatolmány hozzáadásakor (${name}): ${this.context.getLastError()}`, rc);
+    return this;
+  }
+
+  public setChaptersFile(filePath: string, language?: string, charset?: string): this {
+    const rc = this.library.lib.symbols.mtx_merge_set_chapters_file(
+      this.handle,
+      Buffer.from(filePath + "\0"),
+      language ? Buffer.from(language + "\0") : null,
+      charset ? Buffer.from(charset + "\0") : null
+    );
+    if (rc !== 0) throw new MkvError(`Hiba a fejezetek beállításakor (${filePath}): ${this.context.getLastError()}`, rc);
+    return this;
+  }
+
+  public setChaptersText(chapterText: string, language?: string, charset?: string): this {
+    const rc = this.library.lib.symbols.mtx_merge_set_chapters_text(
+      this.handle,
+      Buffer.from(chapterText + "\0"),
+      language ? Buffer.from(language + "\0") : null,
+      charset ? Buffer.from(charset + "\0") : null
+    );
+    if (rc !== 0) throw new MkvError(`Hiba a fejezetek beállításakor szövegből: ${this.context.getLastError()}`, rc);
+    return this;
+  }
+
+  public generateChapters(intervalMs: number, language?: string, nameTemplate?: string): this {
+    const rc = this.library.lib.symbols.mtx_merge_generate_chapters(
+      this.handle,
+      BigInt(intervalMs),
+      language ? Buffer.from(language + "\0") : null,
+      nameTemplate ? Buffer.from(nameTemplate + "\0") : null
+    );
+    if (rc !== 0) throw new MkvError(`Hiba az automatikus fejezetgenerálás beállításakor: ${this.context.getLastError()}`, rc);
     return this;
   }
 

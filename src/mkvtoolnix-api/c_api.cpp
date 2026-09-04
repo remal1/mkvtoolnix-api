@@ -22,6 +22,14 @@
 #include "merge/reader_detection_and_creation.h"
 #include "merge/track_info.h"
 
+#include "common/attachment.h"
+#include "common/chapters/chapters.h"
+#include "common/mime.h"
+#include "common/mm_file_io.h"
+#include "common/mm_mem_io.h"
+#include "common/mm_proxy_io.h"
+#include "common/mm_text_io.h"
+
 #include <cstdio>
 #include <cstring>
 
@@ -217,6 +225,8 @@ int finalize_and_execute(mtx_merge *merge) {
   check_split_support();
   calc_attachment_sizes();
   calc_max_chapter_size();
+  if (g_cluster_helper)
+    g_cluster_helper->verify_and_report_chapter_generation_parameters();
 
   create_next_output_file();
   main_loop();
@@ -280,6 +290,27 @@ nlohmann::json build_reader_json(generic_reader_c const &reader, std::string con
       { "type",       result.type },
       { "codec",      result.info },
       { "properties", verbose_info_to_object(result.verbose_info) },
+    };
+  }
+
+  json["attachments"] = nlohmann::json::array();
+  for (auto const &result : reader.get_id_results_attachments()) {
+    json["attachments"] += nlohmann::json{
+      { "id",           result.id },
+      { "content_type", result.type },
+      { "size",         result.size },
+      { "description",  result.description },
+      { "file_name",    result.info },
+      { "properties",   verbose_info_to_object(result.verbose_info) },
+    };
+  }
+
+  json["chapters"] = nlohmann::json::array();
+  for (auto const &result : reader.get_id_results_chapters()) {
+    json["chapters"] += nlohmann::json{
+      { "id",          result.id },
+      { "num_entries", result.size },
+      { "properties",  verbose_info_to_object(result.verbose_info) },
     };
   }
 
@@ -915,6 +946,186 @@ const char * MTX_API_CALL mtx_input_get_json_info(mtx_merge_t *merge, mtx_input_
   auto json = build_reader_json(*file->reader, file->name);
   merge->context->last_json_info = mtx::json::dump(json, 2);
   return merge->context->last_json_info.c_str();
+}
+
+/* ========================================================================= */
+/* 10. ATTACHMENT SUPPORT                                                    */
+/* ========================================================================= */
+
+int MTX_API_CALL mtx_input_set_no_attachments(mtx_merge_t *merge, mtx_input_t *input, int no_attachments) {
+  if (!merge || !input)
+    return MTX_ERROR_INVALID_ARG;
+  std::lock_guard<std::mutex> lock{s_engine_mutex};
+  auto file = input_file(merge, *input);
+  if (!file || !file->ti)
+    return MTX_ERROR_INVALID_ARG;
+  if (no_attachments)
+    file->ti->m_attach_mode_list.set_none();
+  return MTX_OK;
+}
+
+int MTX_API_CALL mtx_merge_add_attachment_file(mtx_merge_t *merge,
+                                               const char *file_path,
+                                               const char *name,
+                                               const char *mime_type,
+                                               const char *description) {
+  if (!merge || !file_path || !*file_path)
+    return MTX_ERROR_INVALID_ARG;
+  std::lock_guard<std::mutex> lock{s_engine_mutex};
+
+  try {
+    auto att = std::make_shared<attachment_t>();
+    att->source_file = file_path;
+    att->name = file_path;
+    if (name && *name)
+      att->stored_name = name;
+    else
+      att->stored_name = to_fs_path(file_path).filename().string();
+    if (description && *description)
+      att->description = description;
+    if (mime_type && *mime_type)
+      att->mime_type = mime_type;
+    else
+      att->mime_type = mtx::mime::guess_type_for_file(file_path);
+
+    att->to_all_files = true;
+
+    mm_io_cptr io = mm_file_io_c::open(file_path);
+    if (!io || io->get_size() == 0)
+      return fail(merge->context, MTX_ERROR_FILE_NOT_FOUND, "Attachment file is empty or cannot be opened: " + std::string{file_path});
+
+    att->data = memory_c::alloc(io->get_size());
+    io->read(att->data->get_buffer(), att->data->get_size());
+
+    add_attachment(att);
+    return MTX_OK;
+  } catch (std::exception const &ex) {
+    return fail(merge->context, MTX_ERROR_EXCEPTION, ex.what());
+  }
+}
+
+int MTX_API_CALL mtx_merge_add_attachment_memory(mtx_merge_t *merge,
+                                                 const void *data,
+                                                 size_t size,
+                                                 const char *name,
+                                                 const char *mime_type,
+                                                 const char *description) {
+  if (!merge || !data || size == 0 || !name || !*name)
+    return MTX_ERROR_INVALID_ARG;
+  std::lock_guard<std::mutex> lock{s_engine_mutex};
+
+  try {
+    auto att = std::make_shared<attachment_t>();
+    att->name = name;
+    att->stored_name = name;
+    if (description && *description)
+      att->description = description;
+    att->mime_type = (mime_type && *mime_type) ? mime_type : "application/octet-stream";
+    att->to_all_files = true;
+    att->data = memory_c::clone(data, size);
+
+    add_attachment(att);
+    return MTX_OK;
+  } catch (std::exception const &ex) {
+    return fail(merge->context, MTX_ERROR_EXCEPTION, ex.what());
+  }
+}
+
+/* ========================================================================= */
+/* 11. CHAPTER SUPPORT                                                       */
+/* ========================================================================= */
+
+int MTX_API_CALL mtx_input_set_no_chapters(mtx_merge_t *merge, mtx_input_t *input, int no_chapters) {
+  if (!merge || !input)
+    return MTX_ERROR_INVALID_ARG;
+  std::lock_guard<std::mutex> lock{s_engine_mutex};
+  auto file = input_file(merge, *input);
+  if (!file || !file->ti)
+    return MTX_ERROR_INVALID_ARG;
+  file->ti->m_no_chapters = (no_chapters != 0);
+  return MTX_OK;
+}
+
+int MTX_API_CALL mtx_merge_set_chapters_file(mtx_merge_t *merge,
+                                            const char *file_path,
+                                            const char *language,
+                                            const char *charset) {
+  if (!merge || !file_path || !*file_path)
+    return MTX_ERROR_INVALID_ARG;
+  std::lock_guard<std::mutex> lock{s_engine_mutex};
+
+  try {
+    mtx::bcp47::language_c parsed_lang;
+    if (language && *language)
+      parsed_lang = mtx::bcp47::language_c::parse(language);
+
+    std::string cs = (charset && *charset) ? charset : "";
+    auto format = mtx::chapters::format_e::xml;
+    g_chapter_file_name = file_path;
+    g_kax_chapters = mtx::chapters::parse(file_path, 0, -1, 0, parsed_lang, cs, false, &format);
+    if (!g_kax_chapters)
+      return fail(merge->context, MTX_ERROR_INVALID_ARG, "Failed to parse chapter file: " + std::string{file_path});
+
+    return MTX_OK;
+  } catch (std::exception const &ex) {
+    return fail(merge->context, MTX_ERROR_EXCEPTION, ex.what());
+  }
+}
+
+int MTX_API_CALL mtx_merge_set_chapters_text(mtx_merge_t *merge,
+                                            const char *chapter_text,
+                                            const char *language,
+                                            const char *charset) {
+  if (!merge || !chapter_text || !*chapter_text)
+    return MTX_ERROR_INVALID_ARG;
+  std::lock_guard<std::mutex> lock{s_engine_mutex};
+
+  try {
+    mtx::bcp47::language_c parsed_lang;
+    if (language && *language)
+      parsed_lang = mtx::bcp47::language_c::parse(language);
+
+    std::string cs = (charset && *charset) ? charset : "";
+    size_t len = std::strlen(chapter_text);
+    auto mem_io = std::make_shared<mm_mem_io_c>(reinterpret_cast<const uint8_t*>(chapter_text), len);
+    mm_text_io_c text_io{mem_io};
+
+    auto format = mtx::chapters::format_e::xml;
+    g_chapter_file_name = "memory";
+    g_kax_chapters = mtx::chapters::parse(&text_io, 0, -1, 0, parsed_lang, cs, false, &format);
+    if (!g_kax_chapters)
+      return fail(merge->context, MTX_ERROR_INVALID_ARG, "Failed to parse chapter content from text");
+
+    return MTX_OK;
+  } catch (std::exception const &ex) {
+    return fail(merge->context, MTX_ERROR_EXCEPTION, ex.what());
+  }
+}
+
+int MTX_API_CALL mtx_merge_generate_chapters(mtx_merge_t *merge,
+                                             int64_t interval_ms,
+                                             const char *language,
+                                             const char *name_template) {
+  if (!merge || interval_ms <= 0)
+    return MTX_ERROR_INVALID_ARG;
+  std::lock_guard<std::mutex> lock{s_engine_mutex};
+
+  try {
+    mtx::bcp47::language_c parsed_lang;
+    if (language && *language)
+      parsed_lang = mtx::bcp47::language_c::parse(language);
+
+    if (g_cluster_helper) {
+      g_cluster_helper->enable_chapter_generation(chapter_generation_mode_e::interval, parsed_lang);
+      g_cluster_helper->set_chapter_generation_interval(timestamp_c::ms(interval_ms));
+    }
+    if (name_template && *name_template)
+      mtx::chapters::g_chapter_generation_name_template.override(name_template);
+
+    return MTX_OK;
+  } catch (std::exception const &ex) {
+    return fail(merge->context, MTX_ERROR_EXCEPTION, ex.what());
+  }
 }
 
 }

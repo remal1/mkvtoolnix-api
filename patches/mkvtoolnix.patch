@@ -175,7 +175,7 @@ index 63ac35b53..8fd56305b 100644
  
  enum class chapter_generation_mode_e {
 diff --git a/src/merge/generic_reader.h b/src/merge/generic_reader.h
-index aac23f7d3..86a3c571e 100644
+index aac23f7d3..d96155bcd 100644
 --- a/src/merge/generic_reader.h
 +++ b/src/merge/generic_reader.h
 @@ -55,6 +55,7 @@ public:
@@ -186,7 +186,7 @@ index aac23f7d3..86a3c571e 100644
    id_result_t m_id_results_container;
    std::vector<id_result_t> m_id_results_tracks, m_id_results_attachments, m_id_results_chapters, m_id_results_tags;
  
-@@ -119,6 +120,22 @@ public:
+@@ -119,6 +120,28 @@ public:
    virtual attach_mode_e attachment_requested(int64_t id);
  
    virtual void display_identification_results();
@@ -202,6 +202,12 @@ index aac23f7d3..86a3c571e 100644
 +  }
 +  virtual std::vector<id_result_t> const &get_id_results_tracks() const {
 +    return m_id_results_tracks;
++  }
++  virtual std::vector<id_result_t> const &get_id_results_attachments() const {
++    return m_id_results_attachments;
++  }
++  virtual std::vector<id_result_t> const &get_id_results_chapters() const {
++    return m_id_results_chapters;
 +  }
 +  virtual id_result_t const &get_id_results_container() const {
 +    return m_id_results_container;

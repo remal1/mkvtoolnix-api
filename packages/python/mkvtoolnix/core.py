@@ -223,6 +223,27 @@ class MkvLibrary:
         d.mtx_track_set_cues.argtypes = [c_void_p, c_void_p, c_int]
         d.mtx_track_set_cues.restype = c_int
 
+        d.mtx_input_set_no_attachments.argtypes = [c_void_p, c_void_p, c_int]
+        d.mtx_input_set_no_attachments.restype = c_int
+
+        d.mtx_input_set_no_chapters.argtypes = [c_void_p, c_void_p, c_int]
+        d.mtx_input_set_no_chapters.restype = c_int
+
+        d.mtx_merge_add_attachment_file.argtypes = [c_void_p, c_char_p, c_char_p, c_char_p, c_char_p]
+        d.mtx_merge_add_attachment_file.restype = c_int
+
+        d.mtx_merge_add_attachment_memory.argtypes = [c_void_p, c_void_p, c_size_t, c_char_p, c_char_p, c_char_p]
+        d.mtx_merge_add_attachment_memory.restype = c_int
+
+        d.mtx_merge_set_chapters_file.argtypes = [c_void_p, c_char_p, c_char_p, c_char_p]
+        d.mtx_merge_set_chapters_file.restype = c_int
+
+        d.mtx_merge_set_chapters_text.argtypes = [c_void_p, c_char_p, c_char_p, c_char_p]
+        d.mtx_merge_set_chapters_text.restype = c_int
+
+        d.mtx_merge_generate_chapters.argtypes = [c_void_p, c_int64, c_char_p, c_char_p]
+        d.mtx_merge_generate_chapters.restype = c_int
+
 class MkvTrack:
     def __init__(self, merge: 'MkvMerge', handle: c_void_p, track_id: int):
         self._merge = merge
@@ -341,6 +362,18 @@ class MkvInput:
             "track_count": info.track_count,
         }
 
+    def set_no_attachments(self, no_attachments: bool = True) -> 'MkvInput':
+        rc = self._merge.lib.dll.mtx_input_set_no_attachments(self._merge.handle, self._handle, 1 if no_attachments else 0)
+        if rc != 0:
+            raise MkvError(f"Failed to set no attachments: {self._merge.context.get_last_error()}", rc)
+        return self
+
+    def set_no_chapters(self, no_chapters: bool = True) -> 'MkvInput':
+        rc = self._merge.lib.dll.mtx_input_set_no_chapters(self._merge.handle, self._handle, 1 if no_chapters else 0)
+        if rc != 0:
+            raise MkvError(f"Failed to set no chapters: {self._merge.context.get_last_error()}", rc)
+        return self
+
 class MkvContext:
     def __init__(self, lib: Optional[MkvLibrary] = None):
         self.lib = lib or MkvLibrary()
@@ -405,6 +438,51 @@ class MkvMerge:
         rc = self.lib.dll.mtx_merge_set_deterministic(self.handle, 1 if enable else 0)
         if rc != 0:
             raise MkvError(f"Failed to set deterministic mode: {self.context.get_last_error()}", rc)
+        return self
+
+    def add_attachment_file(self, file_path: str, name: Optional[str] = None, mime_type: Optional[str] = None, description: Optional[str] = None) -> 'MkvMerge':
+        c_fp = file_path.encode("utf-8")
+        c_name = name.encode("utf-8") if name else None
+        c_mime = mime_type.encode("utf-8") if mime_type else None
+        c_desc = description.encode("utf-8") if description else None
+        rc = self.lib.dll.mtx_merge_add_attachment_file(self.handle, c_fp, c_name, c_mime, c_desc)
+        if rc != 0:
+            raise MkvError(f"Failed to add attachment file: {self.context.get_last_error()}", rc)
+        return self
+
+    def add_attachment_memory(self, data: bytes, name: str, mime_type: Optional[str] = None, description: Optional[str] = None) -> 'MkvMerge':
+        c_name = name.encode("utf-8")
+        c_mime = mime_type.encode("utf-8") if mime_type else None
+        c_desc = description.encode("utf-8") if description else None
+        rc = self.lib.dll.mtx_merge_add_attachment_memory(self.handle, data, len(data), c_name, c_mime, c_desc)
+        if rc != 0:
+            raise MkvError(f"Failed to add memory attachment: {self.context.get_last_error()}", rc)
+        return self
+
+    def set_chapters_file(self, file_path: str, language: Optional[str] = None, charset: Optional[str] = None) -> 'MkvMerge':
+        c_fp = file_path.encode("utf-8")
+        c_lang = language.encode("utf-8") if language else None
+        c_cs = charset.encode("utf-8") if charset else None
+        rc = self.lib.dll.mtx_merge_set_chapters_file(self.handle, c_fp, c_lang, c_cs)
+        if rc != 0:
+            raise MkvError(f"Failed to set chapters file: {self.context.get_last_error()}", rc)
+        return self
+
+    def set_chapters_text(self, chapter_text: str, language: Optional[str] = None, charset: Optional[str] = None) -> 'MkvMerge':
+        c_txt = chapter_text.encode("utf-8")
+        c_lang = language.encode("utf-8") if language else None
+        c_cs = charset.encode("utf-8") if charset else None
+        rc = self.lib.dll.mtx_merge_set_chapters_text(self.handle, c_txt, c_lang, c_cs)
+        if rc != 0:
+            raise MkvError(f"Failed to set chapters text: {self.context.get_last_error()}", rc)
+        return self
+
+    def generate_chapters(self, interval_ms: int, language: Optional[str] = None, name_template: Optional[str] = None) -> 'MkvMerge':
+        c_lang = language.encode("utf-8") if language else None
+        c_tpl = name_template.encode("utf-8") if name_template else None
+        rc = self.lib.dll.mtx_merge_generate_chapters(self.handle, interval_ms, c_lang, c_tpl)
+        if rc != 0:
+            raise MkvError(f"Failed to generate chapters: {self.context.get_last_error()}", rc)
         return self
 
     def add_input(self, filename: str) -> MkvInput:

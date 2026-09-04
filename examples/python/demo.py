@@ -58,12 +58,16 @@ def main():
             for t in id_data.get("tracks", []):
                 print(f"    -> Sáv #{t['id']}: {t['type']} | Kodek: {t['codec']} | Nyelv: {t['properties'].get('language')}")
 
-    # 3. Teljes Muxing Típusbiztos Sávbeállításokkal és Progress Callbackkel
+    # 3. Teljes Muxing Típusbiztos Sávbeállításokkal, Csatolmányokkal és Fejezetekkel
     output_lib = "python_muxed.mkv"
     if os.path.exists(output_lib):
         os.remove(output_lib)
 
-    print(f"\n[3] Muxing végrehajtása C API-val -> {output_lib}")
+    att_file = "test_attachment_py.txt"
+    with open(att_file, "w", encoding="utf-8") as f:
+        f.write("MKVToolNix Python Attachment File Test Content\n")
+
+    print(f"\n[3] Muxing végrehajtása C API-val (Csatolmányok + Fejezetek) -> {output_lib}")
     progress_updates = []
 
     def on_progress(percentage, cur_sec, tot_sec, bytes_wr):
@@ -78,6 +82,26 @@ def main():
             merge.set_default_language("hun")
             merge.set_deterministic(True)
             merge.on_progress(on_progress)
+
+            # Csatolmányok hozzáadása
+            print("    Fájl csatolmány hozzáadása...")
+            merge.add_attachment_file(att_file, "cover_notes.txt", "text/plain", "Borító jegyzetek")
+
+            print("    Memória puffer csatolmány hozzáadása...")
+            mem_data = b"MKVToolNix Memory Buffer Attachment Payload Data"
+            merge.add_attachment_memory(mem_data, "memory_asset.bin", "application/octet-stream", "Memória puffer csatolmány")
+
+            # Fejezetek hozzáadása szövegből (OGG Simple formátum)
+            print("    Fejezetek beállítása szöveges forrásból...")
+            chapters_text = (
+                "CHAPTER01=00:00:00.000\n"
+                "CHAPTER01NAME=Bevezetés\n"
+                "CHAPTER02=00:00:00.500\n"
+                "CHAPTER02NAME=Fő rész\n"
+                "CHAPTER03=00:00:01.000\n"
+                "CHAPTER03NAME=Befejezés\n"
+            )
+            merge.set_chapters_text(chapters_text, "hun", "UTF-8")
 
             inp = merge.add_input(sample_file)
             merge.prepare()
@@ -99,9 +123,62 @@ def main():
             elapsed = time.time() - start_t
             print(f"\n    Muxing sikeresen befejeződött {elapsed:.3f} mp alatt!")
 
+    if os.path.exists(att_file):
+        os.remove(att_file)
+
     assert os.path.exists(output_lib), "A kimeneti fájl nem jött létre!"
     assert 100 in progress_updates or len(progress_updates) > 0, "A progress callback nem futott le!"
     print(f"    Generált fájl mérete: {os.path.getsize(output_lib)} bájt.")
+
+    # 3b. Csatolmányok és Fejezetek ellenőrzése az előállított fájlban (Identify)
+    print("\n[3b] Csatolmányok és Fejezetek visszaolvasásának ellenőrzése...")
+    with MkvContext(lib) as ctx_verify:
+        with ctx_verify.create_merge() as merge_verify:
+            inp_verify = merge_verify.add_input(output_lib)
+            json_verify = inp_verify.identify_json()
+
+            atts = json_verify.get("attachments", [])
+            print(f"    Csatolmányok száma a kimenetben: {len(atts)}")
+            for att in atts:
+                print(f"    -> Csatolmány #{att['id']}: {att['file_name']} ({att['content_type']}, {att['size']} bájt) - {att.get('description', '')}")
+
+            assert len(atts) == 2, f"Elvárt 2 csatolmány, kapott: {len(atts)}"
+
+            chaps = json_verify.get("chapters", [])
+            print(f"    Fejezet bejegyzések száma a kimenetben: {len(chaps)}")
+            for ch in chaps:
+                print(f"    -> Fejezet #{ch.get('id', 0)}: {ch['num_entries']} bejegyzés")
+
+            assert len(chaps) >= 1 and chaps[0]["num_entries"] == 3, f"Elvárt 3 fejezet bejegyzés, kapott: {chaps}"
+            print("    Csatolmányok és fejezetek jelenléte és integritása sikeresen igazolva!")
+
+    # 3c. Csatolmányok és Fejezetek kizárásának tesztelése (--no-attachments, --no-chapters)
+    print("\n[3c] Csatolmányok és Fejezetek kizárásának tesztelése (--no-attachments, --no-chapters)...")
+    stripped_output = "python_stripped.mkv"
+    if os.path.exists(stripped_output):
+        os.remove(stripped_output)
+
+    with MkvContext(lib) as ctx_strip:
+        with ctx_strip.create_merge() as merge_strip:
+            merge_strip.set_output(stripped_output)
+            inp_strip = merge_strip.add_input(output_lib)
+            inp_strip.set_no_attachments(True)
+            inp_strip.set_no_chapters(True)
+
+            merge_strip.prepare()
+            merge_strip.execute()
+
+        with ctx_strip.create_merge() as merge_check:
+            inp_check = merge_check.add_input(stripped_output)
+            json_check = inp_check.identify_json()
+            att_count = len(json_check.get("attachments", []))
+            ch_count = len(json_check.get("chapters", []))
+            print(f"    Kizárás után: Csatolmányok száma: {att_count}, Fejezetek száma: {ch_count}")
+            assert att_count == 0 and ch_count == 0, f"A kizárás nem működött: att={att_count}, ch={ch_count}"
+            print("    Csatolmányok és fejezetek sikeresen kizárva a kimenetből!")
+
+    if os.path.exists(stripped_output):
+        os.remove(stripped_output)
 
     # 4. Megszakítás (Cancellation) Tesztelése
     print("\n[4] Megszakítás (Cancellation) tesztelése...")

@@ -207,6 +207,23 @@ MTX_API_EXPORT int MTX_API_CALL mtx_track_set_cropping(mtx_merge_t *merge, mtx_t
 MTX_API_EXPORT int MTX_API_CALL mtx_track_set_compression(mtx_merge_t *merge, mtx_track_t *track, int compression_mode);
 MTX_API_EXPORT int MTX_API_CALL mtx_track_set_cues(mtx_merge_t *merge, mtx_track_t *track, int cue_mode);
 
+/* ========================================================================= */
+/* 10. ATTACHMENT SUPPORT                                                    */
+/* ========================================================================= */
+
+MTX_API_EXPORT int MTX_API_CALL mtx_input_set_no_attachments(mtx_merge_t *merge, mtx_input_t *input, int no_attachments);
+MTX_API_EXPORT int MTX_API_CALL mtx_merge_add_attachment_file(mtx_merge_t *merge, const char *file_path, const char *name, const char *mime_type, const char *description);
+MTX_API_EXPORT int MTX_API_CALL mtx_merge_add_attachment_memory(mtx_merge_t *merge, const void *data, size_t size, const char *name, const char *mime_type, const char *description);
+
+/* ========================================================================= */
+/* 11. CHAPTER SUPPORT                                                       */
+/* ========================================================================= */
+
+MTX_API_EXPORT int MTX_API_CALL mtx_input_set_no_chapters(mtx_merge_t *merge, mtx_input_t *input, int no_chapters);
+MTX_API_EXPORT int MTX_API_CALL mtx_merge_set_chapters_file(mtx_merge_t *merge, const char *file_path, const char *language, const char *charset);
+MTX_API_EXPORT int MTX_API_CALL mtx_merge_set_chapters_text(mtx_merge_t *merge, const char *chapter_text, const char *language, const char *charset);
+MTX_API_EXPORT int MTX_API_CALL mtx_merge_generate_chapters(mtx_merge_t *merge, int64_t interval_ms, const char *language, const char *name_template);
+
 #ifdef __cplusplus
 }
 #endif
