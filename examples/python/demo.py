@@ -22,10 +22,16 @@ def main():
     print(" MKVToolNix C ABI Python FFI Integrációs és Paritásteszt")
     print("================================================================================\n")
 
-    # 1. Könyvtár és Verzió-ellenőrzés
+    # 1. Könyvtár és Részletes Verzió-ellenőrzés
     lib = MkvLibrary()
-    api_ver = lib.dll.mtx_api_version()
-    print(f"[1] DLL sikeresen betöltve. C API Major Verzió: {api_ver}")
+    v = lib.get_version()
+    print("[1] DLL sikeresen betöltve:")
+    print(f"    - API Verzió:          v{v['version']} (Major: {v['major']}, Minor: {v['minor']}, Patch: {v['patch']})")
+    print(f"    - ABI Revízió:         {v['abi_revision']}")
+    print(f"    - MKVToolNix Verzió:   {v['mkvtoolnix_version']}")
+    print(f"    - Platform / Compiler: {v.get('platform', 'unknown')} / {v.get('compiler', 'unknown')}")
+    print(f"    - Build Időpont:       {v['build_date']}")
+    print(f"    - Teljes string:       {lib.version_string}")
 
     # 2. Média-identifikáció és JSON lekérdezés
     sample_candidates = [

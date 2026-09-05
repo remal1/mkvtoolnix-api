@@ -6,9 +6,13 @@ export interface VersionInfo {
   major: number;
   minor: number;
   patch: number;
+  version: string;
   abiRevision: number;
   mkvtoolnixVersion: string;
   buildDate: string;
+  platform?: string;
+  compiler?: string;
+  versionString: string;
 }
 
 export interface ProgressInfo {
@@ -90,6 +94,8 @@ export class MkvLibrary {
     this.lib = dlopen(dllPath, {
       mtx_api_version: { args: [], returns: FFIType.i32 },
       mtx_get_version: { args: [FFIType.ptr], returns: FFIType.i32 },
+      mtx_get_version_string: { args: [], returns: FFIType.cstring },
+      mtx_get_version_json: { args: [], returns: FFIType.cstring },
       mtx_init: { args: [FFIType.u32], returns: FFIType.i32 },
 
       mtx_context_create: { args: [], returns: FFIType.ptr },
@@ -156,6 +162,36 @@ export class MkvLibrary {
 
   public get apiVersion(): number {
     return this.lib.symbols.mtx_api_version();
+  }
+
+  public get versionString(): string {
+    const s = this.lib.symbols.mtx_get_version_string();
+    return s ? s.toString() : "";
+  }
+
+  public get mkvtoolnixVersion(): string {
+    return this.getVersion().mkvtoolnixVersion;
+  }
+
+  public get version(): string {
+    return this.getVersion().version;
+  }
+
+  public getVersion(): VersionInfo {
+    const raw = this.lib.symbols.mtx_get_version_json();
+    const parsed = JSON.parse(raw ? raw.toString() : "{}");
+    return {
+      major: parsed.api.major,
+      minor: parsed.api.minor,
+      patch: parsed.api.patch,
+      version: parsed.api.version,
+      abiRevision: parsed.abi_revision,
+      mkvtoolnixVersion: parsed.mkvtoolnix_version,
+      buildDate: parsed.build_date,
+      platform: parsed.platform,
+      compiler: parsed.compiler,
+      versionString: this.versionString,
+    };
   }
 }
 

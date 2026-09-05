@@ -338,6 +338,53 @@ int MTX_API_CALL mtx_get_version(mtx_version_info_t *info) {
   return MTX_OK;
 }
 
+const char * MTX_API_CALL mtx_get_version_string(void) {
+  static std::string s_ver_str;
+  if (s_ver_str.empty()) {
+    s_ver_str = fmt::format("mkvtoolnix-api v{0}.{1}.{2} (ABI rev 1, MKVToolNix {3}, built {4} {5})",
+                            MTX_API_VERSION_MAJOR, MTX_API_VERSION_MINOR, MTX_API_VERSION_PATCH,
+                            get_current_version().to_string(), __DATE__, __TIME__);
+  }
+  return s_ver_str.c_str();
+}
+
+const char * MTX_API_CALL mtx_get_version_json(void) {
+  static std::string s_ver_json;
+  if (s_ver_json.empty()) {
+    nlohmann::json j{
+      { "api", {
+          { "major", MTX_API_VERSION_MAJOR },
+          { "minor", MTX_API_VERSION_MINOR },
+          { "patch", MTX_API_VERSION_PATCH },
+          { "version", fmt::format("{0}.{1}.{2}", MTX_API_VERSION_MAJOR, MTX_API_VERSION_MINOR, MTX_API_VERSION_PATCH) },
+      }},
+      { "abi_revision", 1 },
+      { "mkvtoolnix_version", get_current_version().to_string() },
+      { "build_date", __DATE__ " " __TIME__ },
+#if defined(_WIN32)
+      { "platform", "windows" },
+#elif defined(__APPLE__)
+      { "platform", "macos" },
+#elif defined(__linux__)
+      { "platform", "linux" },
+#else
+      { "platform", "unknown" },
+#endif
+#if defined(_MSC_VER)
+      { "compiler", fmt::format("MSVC {0}", _MSC_VER) },
+#elif defined(__clang__)
+      { "compiler", fmt::format("Clang {0}.{1}.{2}", __clang_major__, __clang_minor__, __clang_patchlevel__) },
+#elif defined(__GNUC__)
+      { "compiler", fmt::format("GCC {0}.{1}.{2}", __GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__) },
+#else
+      { "compiler", "unknown" },
+#endif
+    };
+    s_ver_json = j.dump(2);
+  }
+  return s_ver_json.c_str();
+}
+
 int MTX_API_CALL mtx_init(uint32_t expected_major_version) {
   if (expected_major_version != MTX_API_VERSION_MAJOR)
     return MTX_ERROR_UNSUPPORTED;

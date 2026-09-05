@@ -13,9 +13,16 @@ async function main() {
   console.log(" MKVToolNix C ABI Bun (TypeScript) FFI Integrációs és Paritásteszt");
   console.log("================================================================================\n");
 
-  // 1. DLL betöltése és verzió-ellenőrzés
+  // 1. DLL betöltése és részletes verzió-ellenőrzés
   const lib = new MkvLibrary();
-  console.log(`[1] DLL sikeresen betöltve. C API Major Verzió: ${lib.apiVersion}`);
+  const v = lib.getVersion();
+  console.log(`[1] DLL sikeresen betöltve:`);
+  console.log(`    - API Verzió:          v${v.version} (Major: ${v.major}, Minor: ${v.minor}, Patch: ${v.patch})`);
+  console.log(`    - ABI Revízió:         ${v.abiRevision}`);
+  console.log(`    - MKVToolNix Verzió:   ${v.mkvtoolnixVersion}`);
+  console.log(`    - Platform / Compiler: ${v.platform || "unknown"} / ${v.compiler || "unknown"}`);
+  console.log(`    - Build Időpont:       ${v.buildDate}`);
+  console.log(`    - Teljes string:       ${lib.versionString}`);
 
   // 2. Médiafájl azonosítása (Identify & JSON)
   const sampleCandidates = [

@@ -106,6 +106,9 @@ class MkvLibrary:
         d.mtx_get_version.argtypes = [POINTER(MtxVersionInfo)]
         d.mtx_get_version.restype = c_int
 
+        d.mtx_get_version_string.restype = c_char_p
+        d.mtx_get_version_json.restype = c_char_p
+
         d.mtx_init.argtypes = [c_uint32]
         d.mtx_init.restype = c_int
 
@@ -243,6 +246,41 @@ class MkvLibrary:
 
         d.mtx_merge_generate_chapters.argtypes = [c_void_p, c_int64, c_char_p, c_char_p]
         d.mtx_merge_generate_chapters.restype = c_int
+
+    @property
+    def api_version(self) -> int:
+        return self.dll.mtx_api_version()
+
+    @property
+    def version_string(self) -> str:
+        s = self.dll.mtx_get_version_string()
+        return s.decode("utf-8") if s else ""
+
+    @property
+    def version(self) -> str:
+        return self.get_version()["version"]
+
+    @property
+    def mkvtoolnix_version(self) -> str:
+        return self.get_version()["mkvtoolnix_version"]
+
+    def get_version(self) -> Dict[str, Any]:
+        s = self.dll.mtx_get_version_json()
+        if not s:
+            raise MkvError("Failed to get version JSON from MKVToolNix library")
+        data = json.loads(s.decode("utf-8"))
+        return {
+            "major": data["api"]["major"],
+            "minor": data["api"]["minor"],
+            "patch": data["api"]["patch"],
+            "version": data["api"]["version"],
+            "abi_revision": data["abi_revision"],
+            "mkvtoolnix_version": data["mkvtoolnix_version"],
+            "build_date": data["build_date"],
+            "platform": data.get("platform", ""),
+            "compiler": data.get("compiler", ""),
+            "version_string": self.version_string,
+        }
 
 class MkvTrack:
     def __init__(self, merge: 'MkvMerge', handle: c_void_p, track_id: int):

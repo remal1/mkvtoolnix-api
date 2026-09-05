@@ -138,6 +138,8 @@ typedef void (MTX_API_CALL *mtx_log_callback)(void *userdata, unsigned int level
 
 MTX_API_EXPORT int MTX_API_CALL mtx_api_version(void);
 MTX_API_EXPORT int MTX_API_CALL mtx_get_version(mtx_version_info_t *info);
+MTX_API_EXPORT const char * MTX_API_CALL mtx_get_version_string(void);
+MTX_API_EXPORT const char * MTX_API_CALL mtx_get_version_json(void);
 MTX_API_EXPORT int MTX_API_CALL mtx_init(uint32_t expected_major_version);
 
 /* ========================================================================= */

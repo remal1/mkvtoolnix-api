@@ -122,6 +122,36 @@ The compiled library (`libmkvtoolnix.dylib`) is placed in `build/`.
 
 ---
 
+## Version Information Query
+
+Both Bun and Python SDKs provide clean, high-level methods to inspect versions and runtime environment:
+
+### Bun JS / TypeScript
+```typescript
+import { MkvLibrary } from "./packages/bun/src/index";
+
+const lib = new MkvLibrary();
+console.log(lib.apiVersion);        // 1
+console.log(lib.version);           // "1.0.0"
+console.log(lib.mkvtoolnixVersion); // "101.0"
+console.log(lib.versionString);     // "mkvtoolnix-api v1.0.0 (ABI rev 1, MKVToolNix 101.0, built ...)"
+console.log(lib.getVersion());      // { major: 1, minor: 0, patch: 0, abiRevision: 1, mkvtoolnixVersion: "101.0", ... }
+```
+
+### Python
+```python
+from mkvtoolnix import MkvLibrary
+
+lib = MkvLibrary()
+print(lib.api_version)        # 1
+print(lib.version)            # "1.0.0"
+print(lib.mkvtoolnix_version) # "101.0"
+print(lib.version_string)     # "mkvtoolnix-api v1.0.0 (ABI rev 1, MKVToolNix 101.0, built ...)"
+print(lib.get_version())      # { 'major': 1, 'minor': 0, 'patch': 0, 'abi_revision': 1, 'mkvtoolnix_version': '101.0', ... }
+```
+
+---
+
 ## High-Level SDK Usage
 
 ### Bun JS / TypeScript
